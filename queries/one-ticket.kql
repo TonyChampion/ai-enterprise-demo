@@ -1,0 +1,15 @@
+// Demo 4, beat 1-2: everything that happened for one ticket, as one trace.
+// Find the operation(s) that touched ticket 4471, then pull every span in them.
+let ticketOps =
+    union requests, dependencies
+    | where timestamp > ago(1d)
+    | where tostring(customDimensions["ticket.id"]) == "4471"
+    | distinct operation_Id;
+union requests, dependencies
+| where operation_Id in (ticketOps)
+| project timestamp, operation_Id, itemType, cloud_RoleName, name, resultCode, duration,
+          op = tostring(customDimensions["gen_ai.operation.name"]),
+          route = tostring(customDimensions["ai.route"]),
+          inTok = tostring(customDimensions["gen_ai.usage.input_tokens"]),
+          outTok = tostring(customDimensions["gen_ai.usage.output_tokens"])
+| order by operation_Id, timestamp asc

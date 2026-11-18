@@ -424,3 +424,8 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# Demo: local secrets written by infra/deploy.ps1
+appsettings.Local.json
+# Demo: dev JWTs written by make-tokens.ps1
+demo-tokens.json

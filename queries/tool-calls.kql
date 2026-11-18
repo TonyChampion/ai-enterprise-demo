@@ -1,0 +1,10 @@
+// Demo 3, beat 4: what the AI's tools actually returned. IDs and counts, never ticket text.
+// Look at tool.scope: "contoso" (from the token) vs "model-chosen:fabrikam" (the naive tool).
+dependencies
+| where timestamp > ago(1d)
+| where tostring(customDimensions["gen_ai.operation.name"]) == "execute_tool"
+| project timestamp, operation_Id, tool = tostring(customDimensions["gen_ai.tool.name"]),
+          scope = tostring(customDimensions["tool.scope"]),
+          customers = tostring(customDimensions["tool.result.customers"]),
+          tickets = tostring(customDimensions["tool.result.tickets"])
+| order by timestamp desc

@@ -1,0 +1,11 @@
+// Demo 4, beat 3: what the gateway refused. A blocked request never reaches the model,
+// so it has no model span: look for it at the gateway (API Management logs requests to the same App Insights).
+requests
+| where timestamp > ago(1d)
+| where cloud_RoleName has "apim" or customDimensions has "API Name"
+| where resultCode in ("401", "403", "429")
+| project timestamp, operation_Id, resultCode, name, duration,
+          reason = case(resultCode == "429", "over token limit",
+                        resultCode == "401", "token rejected",
+                        "content safety, quota, or access (read the body)")
+| order by timestamp desc

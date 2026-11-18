@@ -1,0 +1,50 @@
+<!--
+  Model gateway policy. Four jobs, in this order:
+    1. Who is calling?        validate-azure-ad-token (audience = cognitiveservices)
+    2. How much may they use? llm-token-limit, keyed on the caller (429 when exceeded)
+    3. Is the prompt an attack? llm-content-safety with Prompt Shields (403 when blocked)
+    4. Who used what?         llm-emit-token-metric, dimensioned by caller
+  Then forward to Foundry with APIM's own managed identity (backend credentials).
+  Two hops: the app authenticates to APIM; APIM authenticates to the model as itself.
+-->
+<policies>
+  <inbound>
+    <base />
+    <validate-azure-ad-token tenant-id="{tenant-id}" header-name="Authorization"
+                             failed-validation-httpcode="401"
+                             failed-validation-error-message="Unauthorized caller"
+                             output-token-variable-name="jwt">
+      <audiences>
+        <audience>https://cognitiveservices.azure.com</audience>
+      </audiences>
+    </validate-azure-ad-token>
+    <set-variable name="caller" value="@{
+        var jwt = (Jwt)context.Variables["jwt"];
+        var app = jwt.Claims.GetValueOrDefault("appid", jwt.Claims.GetValueOrDefault("azp", "unknown-app"));
+        var oid = jwt.Claims.GetValueOrDefault("oid", "unknown-principal");
+        return app + "/" + oid;
+    }" />
+    <llm-token-limit counter-key="@((string)context.Variables["caller"])"
+                     tokens-per-minute="{tokens-per-minute}"
+                     estimate-prompt-tokens="true"
+                     remaining-tokens-header-name="x-remaining-tokens" />
+    <llm-content-safety backend-id="content-safety" shield-prompt="true" />
+    <llm-emit-token-metric namespace="ai-gateway">
+      <dimension name="Caller" value="@((string)context.Variables["caller"])" />
+      <dimension name="API ID" />
+    </llm-emit-token-metric>
+    <set-backend-service backend-id="foundry-openai" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+    <set-header name="x-gateway-caller" exists-action="override">
+      <value>@((string)context.Variables["caller"])</value>
+    </set-header>
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

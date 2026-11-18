@@ -1,0 +1,15 @@
+// The Tuesday question: who called the model, about which tickets, and how many tokens.
+// Run in Application Insights > Logs. Token totals are usage, not your bill: the last line is an ESTIMATE.
+// Count from one source (Tickets.AI spans), or SDK + wrapper spans will double the totals.
+let inRate = 0.0000004; let outRate = 0.0000016;   // example per-token rates: use your own
+dependencies
+| where timestamp > ago(1d)
+| where tostring(customDimensions["gen_ai.operation.name"]) == "chat"
+| extend caller = tostring(customDimensions["caller"]),
+         ticket = tostring(customDimensions["ticket.id"]),
+         route  = tostring(customDimensions["ai.route"]),
+         inTok  = tolong(customDimensions["gen_ai.usage.input_tokens"]),
+         outTok = tolong(customDimensions["gen_ai.usage.output_tokens"])
+| summarize calls = count(), tickets = dcountif(ticket, isnotempty(ticket)),
+            inTok = sum(coalesce(inTok, 0)), outTok = sum(coalesce(outTok, 0)) by caller
+| extend estCost = round(inTok * inRate + outTok * outRate, 4)
